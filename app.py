@@ -28,13 +28,12 @@ def health_check():
 @app.route('/api/clean', methods=['POST'])
 def clean_text():
     """
-    TODO: Implement this endpoint for Part 3
-    
-    API endpoint that accepts a URL and returns cleaned text
-    
+    Accepts a Project Gutenberg URL, fetches and cleans the text,
+    and returns statistics and a short summary.
+
     Expected JSON input:
         {"url": "https://www.gutenberg.org/files/1342/1342-0.txt"}
-    
+
     Returns JSON:
         {
             "success": true/false,
@@ -88,13 +87,12 @@ def clean_text():
 @app.route('/api/analyze', methods=['POST'])
 def analyze_text():
     """
-    TODO: Implement this endpoint for Part 3
-    
-    API endpoint that accepts raw text and returns statistics only
-    
+    Accepts raw text and returns statistics only.
+    Useful for analyzing text that has already been fetched and cleaned.
+
     Expected JSON input:
         {"text": "Your raw text here..."}
-    
+
     Returns JSON:
         {
             "success": true/false,
