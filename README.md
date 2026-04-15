@@ -45,7 +45,7 @@ flask --app app run --port 5001 --debug
 
 Open your browser to: http://localhost:5001
 
-> Note: Port 5000 is taken by AirPlay on macOS, so we use 5001 instead.
+> Note: Port 5000 is taken by AirPlay on macOS, so we use 5001 instead (on my system)
 
 ## Project Structure
 
