@@ -371,16 +371,22 @@
             showLoading();
             
             try {
-                // TODO: Make API call to /api/clean endpoint
-                // Hint: Use fetch() with POST method
-                // Send JSON: {"url": url}
-                // Handle the response
-                
-                // For now, show an error since the API isn't implemented yet
-                setTimeout(() => {
-                    showError('API not implemented yet. Complete Part 3 to make this work!');
-                }, 1000);
-                
+                // Send the URL to the backend for fetching, cleaning, and analysis
+                const response = await fetch('/api/clean', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: url })
+                });
+
+                const data = await response.json();
+
+                // Check if the server returned a success response
+                if (data.success) {
+                    displayResults(data);
+                } else {
+                    showError(data.error || 'Unknown error from server');
+                }
+
             } catch (error) {
                 showError('Network error: ' + error.message);
             }

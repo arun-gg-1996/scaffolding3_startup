@@ -45,21 +45,40 @@ def clean_text():
         }
     """
     try:
-        # TODO: Get JSON data from request
-        # TODO: Extract URL from the JSON
-        # TODO: Validate URL (should be .txt)
-        # TODO: Use preprocessor.fetch_from_url() 
-        # TODO: Clean the text with preprocessor.clean_gutenberg_text()
-        # TODO: Normalize with preprocessor.normalize_text()
-        # TODO: Get statistics with preprocessor.get_text_statistics()
-        # TODO: Create summary with preprocessor.create_summary()
-        # TODO: Return JSON response
-        
+        data = request.get_json()
+
+        # Make sure the request body contains a 'url' field
+        if not data or 'url' not in data:
+            return jsonify({"success": False, "error": "Missing 'url' field in request"}), 400
+
+        url = data['url']
+
+        # Fetch the raw text from the given URL
+        raw_text = preprocessor.fetch_from_url(url)
+
+        # Strip Gutenberg headers/footers from the raw text
+        cleaned = preprocessor.clean_gutenberg_text(raw_text)
+
+        # Normalize the text (lowercase, remove extra punctuation, etc.)
+        normalized = preprocessor.normalize_text(cleaned)
+
+        # Compute word/sentence statistics on the normalized text
+        statistics = preprocessor.get_text_statistics(normalized)
+
+        # Skip past the table of contents to find where the story actually starts.
+        # This gives us a better summary and a more meaningful 500-char preview.
+        story_text = preprocessor.skip_front_matter(cleaned)
+
+        # Build summary from the story text (original casing, before normalization)
+        summary = preprocessor.create_summary(story_text)
+
         return jsonify({
-            "success": False,
-            "error": "Not implemented yet - complete this for Part 3!"
-        }), 501
-        
+            "success": True,
+            "cleaned_text": story_text,   # preview will show story content, not TOC
+            "statistics": statistics,
+            "summary": summary
+        })
+
     except Exception as e:
         return jsonify({
             "success": False,
@@ -84,16 +103,22 @@ def analyze_text():
         }
     """
     try:
-        # TODO: Get JSON data from request
-        # TODO: Extract text from the JSON
-        # TODO: Get statistics with preprocessor.get_text_statistics()
-        # TODO: Return JSON response
-        
+        data = request.get_json()
+
+        # Make sure the request body contains a 'text' field
+        if not data or 'text' not in data:
+            return jsonify({"success": False, "error": "Missing 'text' field in request"}), 400
+
+        text = data['text']
+
+        # Compute statistics directly on the provided text
+        statistics = preprocessor.get_text_statistics(text)
+
         return jsonify({
-            "success": False,
-            "error": "Not implemented yet - complete this for Part 3!"
-        }), 501
-        
+            "success": True,
+            "statistics": statistics
+        })
+
     except Exception as e:
         return jsonify({
             "success": False,

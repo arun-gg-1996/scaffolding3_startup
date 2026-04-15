@@ -62,15 +62,16 @@ class TextPreprocessor:
         # Convert to lowercase
         text = text.lower()
         
-        # Standardize quotes and dashes
-        text = re.sub(r'[""]', '"', text)
-        text = re.sub(r'['']', "'", text)
-        text = re.sub(r'—|–', '-', text)
-        
+        # Standardize curly quotes and dashes using Unicode code points
+        # to avoid encoding issues with smart quote characters in regex patterns
+        text = re.sub('[\u201c\u201d]', '"', text)   # left/right double curly quotes -> "
+        text = re.sub("[\u2018\u2019]", "'", text)   # left/right single curly quotes -> '
+        text = re.sub('[\u2014\u2013]', '-', text)   # em dash / en dash -> -
+
         if preserve_sentences:
             # Keep sentence endings but remove other punctuation
             # This regex keeps . ! ? but removes , ; : etc
-            text = re.sub(r'[^\w\s.!?\'-]', ' ', text)
+            text = re.sub(r"[^\w\s.!?'\-]", ' ', text)
         else:
             # Remove all punctuation except apostrophes in contractions
             text = re.sub(r"(?<!\w)'(?!\w)|[^\w\s]", ' ', text)
@@ -118,49 +119,153 @@ class TextPreprocessor:
     
     def fetch_from_url(self, url: str) -> str:
         """
-        TODO: Fetch text content from a URL (especially Project Gutenberg)
-        
+        Fetch raw text content from a URL.
+        Only accepts .txt URLs (e.g. Project Gutenberg plain text files).
+
         Args:
             url: URL to a .txt file
-            
+
         Returns:
-            Raw text content
-            
+            Raw text content as a string
+
         Raises:
-            Exception if URL is invalid or cannot be reached
+            ValueError: If the URL does not point to a .txt file
+            Exception: If the request fails or returns a non-200 status
         """
-        # Hint: Use requests.get() and validate that it's a .txt URL
-        # Don't forget error handling!
-        raise NotImplementedError("Implement this for Part 2 of the assignment")
+        # Only allow .txt URLs to avoid fetching HTML or binary files
+        if not url.endswith('.txt'):
+            raise ValueError("URL must point to a .txt file")
+
+        # Project Gutenberg blocks requests that look like bots.
+        # Adding a User-Agent header makes the request look like it's coming from a browser.
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            )
+        }
+
+        # Increased timeout to 60s — some Gutenberg files are large and slow to download
+        response = requests.get(url, headers=headers, timeout=60)
+
+        # Raise an error if the server returned a bad status code
+        if response.status_code != 200:
+            raise Exception(f"Failed to fetch URL. Status code: {response.status_code}")
+
+        return response.text
     
     def get_text_statistics(self, text: str) -> Dict:
         """
-        TODO: Calculate basic statistics about the text
-        
-        Returns dictionary with:
-            - total_characters
-            - total_words  
-            - total_sentences
-            - avg_word_length
-            - avg_sentence_length
-            - most_common_words (top 10)
+        Calculate basic statistics about the given text.
+
+        Returns a dictionary with:
+            - total_characters: number of characters in the text
+            - total_words: number of words
+            - total_sentences: number of sentences
+            - avg_word_length: average number of characters per word
+            - avg_sentence_length: average number of words per sentence
+            - most_common_words: top 10 most frequent words
         """
-        # Hint: Use the existing tokenize methods and Counter
-        raise NotImplementedError("Implement this for Part 2 of the assignment")
+        # Use existing tokenizer methods to break text into words and sentences
+        words = self.tokenize_words(text)
+        sentences = self.tokenize_sentences(text)
+
+        # Avoid division by zero if text is empty
+        avg_word_length = sum(len(w) for w in words) / len(words) if words else 0
+        avg_sentence_length = len(words) / len(sentences) if sentences else 0
+
+        # Count word frequencies and return the top 10
+        word_counts = Counter(words)
+        most_common = word_counts.most_common(10)
+
+        return {
+            "total_characters": len(text),
+            "total_words": len(words),
+            "total_sentences": len(sentences),
+            "avg_word_length": round(avg_word_length, 2),
+            "avg_sentence_length": round(avg_sentence_length, 2),
+            "most_common_words": most_common
+        }
     
+    def skip_front_matter(self, text: str) -> str:
+        """
+        Skip past the table of contents and front matter to find
+        where the actual story prose begins.
+
+        Strategy: split the text into paragraphs (blank-line separated blocks)
+        and return from the first paragraph that looks like real prose.
+
+        A paragraph is considered real prose if:
+        - It is long enough to be a sentence (at least 80 characters)
+        - It does not contain 3 or more chapter/letter references (i.e. not a TOC)
+        - It is not a short all-caps heading
+
+        If no prose paragraph is found, the original text is returned as-is.
+        """
+        # Split on one or more blank lines to get paragraphs
+        paragraphs = re.split(r'\n\s*\n', text)
+
+        for i, para in enumerate(paragraphs):
+            stripped = para.strip()
+
+            # Skip very short blocks — these are headings or single labels
+            if len(stripped) < 80:
+                continue
+
+            # Skip TOC paragraphs — they repeat "chapter" or "letter" many times
+            lower = stripped.lower()
+            if lower.count('chapter') >= 3 or lower.count('letter') >= 3:
+                continue
+
+            # Skip blocks that are entirely uppercase (e.g. "ETYMOLOGY. (Supplied by...)")
+            # by checking if most words are uppercase
+            words = stripped.split()
+            upper_words = sum(1 for w in words if w.isupper() and len(w) > 1)
+            if len(words) > 0 and upper_words / len(words) > 0.5:
+                continue
+
+            # This paragraph looks like real prose — return from here
+            return '\n\n'.join(paragraphs[i:]).strip()
+
+        # Nothing matched — return the full text unchanged
+        return text
+
     def create_summary(self, text: str, num_sentences: int = 3) -> str:
         """
-        TODO: Create a simple extractive summary by returning the first N sentences
-        
+        Create a simple extractive summary by returning the first N sentences.
+        This is not AI-based — it just takes the opening sentences of the text.
+
         Args:
-            text: Cleaned text
-            num_sentences: Number of sentences to include
-            
+            text: Cleaned/normalized text
+            num_sentences: How many sentences to include in the summary (default 3)
+
         Returns:
-            Summary string
+            A string containing the first N sentences joined together
         """
-        # Hint: Use tokenize_sentences() and join the first N sentences
-        raise NotImplementedError("Implement this for Part 2 of the assignment")
+        sentences = self.tokenize_sentences(text)
+
+        # Filter out junk sentences using two checks:
+        # 1. Must have at least 6 words (removes short headings and captions)
+        # 2. Must not be a TOC dump — those are long strings like "Chapter 1 Chapter 2 Chapter 3..."
+        #    We detect them by counting how many times "chapter" or "letter" appears in one sentence
+        def is_meaningful(sentence):
+            words = sentence.split()
+            if len(words) < 6:
+                return False
+            lower = sentence.lower()
+            # If "chapter" or "letter" appears 3+ times, it's probably a TOC line
+            if lower.count('chapter') >= 3 or lower.count('letter') >= 3:
+                return False
+            return True
+
+        meaningful = [s for s in sentences if is_meaningful(s)]
+
+        # Take the first N meaningful sentences (or fewer if not enough)
+        selected = meaningful[:num_sentences]
+
+        # Join them back into a readable paragraph
+        return '. '.join(selected) + '.'
 
 
 class FrequencyAnalyzer:
