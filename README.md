@@ -40,10 +40,12 @@ All checks should pass before running the app.
 ### 4. Start the server
 
 ```bash
-python app.py
+flask --app app run --port 5001 --debug
 ```
 
-Open your browser to: http://localhost:5000
+Open your browser to: http://localhost:5001
+
+> Note: Port 5000 is taken by AirPlay on macOS, so we use 5001 instead.
 
 ## Project Structure
 
